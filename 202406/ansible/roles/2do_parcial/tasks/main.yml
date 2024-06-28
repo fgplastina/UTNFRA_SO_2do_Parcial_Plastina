@@ -1,6 +1,66 @@
 ---
-# tasks file for 2do_parcial
+    - name: Crear la estructura de directorios
+      file:
+        path: /tmp/2do_parcial/{{ item }}
+        state: directory
+        mode: '0755'
+      with_items:
+        - equipo
 
-- debug:
-    msg: "Tareas del 2do Parcial"
+    - name: Configurar sudoers para el grupo 2PSupervisores
+      become: yes
+      become_user: root
+      lineinfile:
+        path: /etc/sudoers
+        state: present
+        regexp: '^%2PSupervisores'
+        line: '%2PSupervisores ALL=(ALL) NOPASSWD: ALL'
+        validate: 'visudo -cf %s'
 
+    - name: Obtener el nombre del equipo actual
+      command: hostname
+      register: hostname
+
+    - name: Generar archivo de datos del alumno
+      template:
+        src: roles/2do_parcial/templates/datos_alumno.txt.j2
+        dest: /tmp/2do_parcial/alumno/datos_alumno.txt
+      vars:
+        name: Federico
+        last_name: Plastina
+        division: "311"
+
+    - name: Obtener el nombre de la distro
+      shell: grep "PRETTY" /etc/os-release | awk -F '"' '{print $2}'
+      register: distribution_raw
+
+    - name: Retrieve distri
+      set_fact:
+        distribution: "{{ (distribution_raw.stdout_lines | list).0 }}"
+
+
+
+    - name: Retrieve CPU info
+      command: cat /proc/cpuinfo
+      register: cpuinfo
+
+    - name: Count the number of 'processor' lines
+      set_fact:
+        cpu_cores: "{{ cpuinfo.stdout_lines | select('match', '^processor') | list | length }}"
+
+    - name: Obtener mi IP
+      shell: ip a | grep enp0s8 | awk  '{ print $2 }' | tail -n 1
+      register: ip_raw
+
+    - name: IP
+      set_fact:
+       ip: "{{ (ip_raw.stdout_lines | list ).0 }}"
+
+    - name: Generar archivo de datos del equipo
+      template:
+        src: roles/2do_parcial/templates/datos_equipo.txt.j2
+        dest: /tmp/2do_parcial/equipo/datos_equipo.txt
+      vars:
+        cpu_cores: "{{ cpu_cores.stdout_lines }}"
+        distribution: "{{ distribucion.stdout_lines }}"
+        ip: "{{ ip.stdout_lines | regex_replace('\/.*','') }}"
